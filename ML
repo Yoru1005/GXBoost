@@ -1,0 +1,57 @@
+import pandas as pd
+import xgboost as xgb
+from sklearn.metrics import roc_auc_score
+
+
+# 讀取訓練集和測試集
+train_df = pd.read_csv("cleaned_file.csv")
+test_df = pd.read_csv("test.csv")
+
+# 確保測試集沒有 "死亡" 欄位
+if '死亡' in test_df.columns:
+    test_df = test_df.drop(columns=['hospital_death'])
+
+# 先合併兩個 DataFrame，確保 One-Hot Encoding 的欄位一致
+full_df = pd.concat([train_df.drop(columns=['hospital_death']), test_df], axis=0)
+
+# One-Hot Encoding（確保 `train` 和 `test` 一樣）
+full_df = pd.get_dummies(full_df, drop_first=False)
+
+#處理缺失直
+full_df = full_df.fillna(full_df.median())
+
+# 拆分回訓練集和測試集
+X_train = full_df.iloc[:len(train_df), :]  # 取回訓練數據
+X_test = full_df.iloc[len(train_df):, :]   # 取回測試數據
+y_train = train_df['hospital_death']  # 訓練集標籤
+
+# 初始化 XGBoost
+xgb_model = xgb.XGBClassifier(
+    objective='binary:logistic',
+    eval_metric='logloss',
+    use_label_encoder=False,
+    n_estimators=200,
+    max_depth=5,
+    learning_rate=0.05,
+    subsample=0.8,
+    colsample_bytree=0.8
+)
+
+# 訓練模型
+xgb_model.fit(X_train, y_train)
+
+#進行預測
+y_pred_test = xgb_model.predict(X_test)
+
+# 建立 DataFrame
+submission = pd.DataFrame({
+    'encounter_id': test_df['encounter_id'],  # 病患 ID
+    'hospital_death': y_pred_test  # 預測結果
+})
+
+# 儲存 CSV
+submission.to_csv("submission.csv", index=False)
+print("success")
+
+
+
